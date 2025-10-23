@@ -38,6 +38,7 @@ function App() {
         setData(data);
       } else if (data.error) {
         toast.error(`Error: ${data.error.message}`);
+        setData(null);
         throw new Error(data.error.message);
       }
     } catch (error) {

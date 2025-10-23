@@ -8,7 +8,7 @@ const Search = ({ urls, isSearching, handleChange, handleSearch }) => {
         <strong>URL:</strong>
       </Typography>
       <TextField
-        placeholder="Enter URLs separated by commas"
+        placeholder="Enter URL"
         value={urls}
         onChange={handleChange}
         sx={{
