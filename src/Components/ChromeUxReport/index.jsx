@@ -1,99 +1,19 @@
-import React, { useState, useMemo } from 'react';
-import {
-  Box,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  TextField,
-  Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TableSortLabel,
-  IconButton,
-} from '@mui/material';
-import { extractMetrics } from '../../utils/helpers';
+import React, { useState, useEffect } from 'react';
+import { Box, Typography } from '@mui/material';
+import SummaryReport from './SummaryReport';
+import SingleReport from './SingleReport';
+import FilterPanel from './FilterPanel';
+import ReportTabs from './ReportTabs';
+import TableHeader from './TableHeader';
 
-const ChromeUxReport = ({ data }) => {
+// Main Component
+const ChromeUxReport = ({ reports }) => {
   const [nameFilter, setNameFilter] = useState('');
   const [p75Threshold, setP75Threshold] = useState('');
   const [thresholdOperator, setThresholdOperator] = useState('gte');
   const [sortBy, setSortBy] = useState('');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [showFilters, setShowFilters] = useState(true);
-
-  // Extract metrics with useMemo to avoid dependency changes
-  const record = data?.record;
-
-  const allMetrics = useMemo(() => {
-    return record ? extractMetrics(record) : [];
-  }, [record]);
-
-  // Filter and sort metrics
-  const filteredAndSortedMetrics = useMemo(() => {
-    let filtered = allMetrics.filter((metric) => {
-      // Filter by name
-      if (
-        nameFilter &&
-        !metric.key.toLowerCase().includes(nameFilter.toLowerCase())
-      ) {
-        return false;
-      }
-
-      // Filter by p75 threshold
-      if (p75Threshold && metric.p75 !== null && metric.p75 !== undefined) {
-        const threshold = parseFloat(p75Threshold);
-        if (!isNaN(threshold)) {
-          if (thresholdOperator === 'gte' && metric.p75 < threshold) {
-            return false;
-          }
-          if (thresholdOperator === 'lte' && metric.p75 > threshold) {
-            return false;
-          }
-          if (thresholdOperator === 'eq' && metric.p75 !== threshold) {
-            return false;
-          }
-        }
-      }
-
-      return true;
-    });
-
-    // Sort metrics
-    if (sortBy) {
-      filtered = [...filtered].sort((a, b) => {
-        let aValue, bValue;
-
-        if (sortBy === 'name') {
-          aValue = a.key.toLowerCase();
-          bValue = b.key.toLowerCase();
-        } else if (sortBy === 'p75') {
-          aValue = a.p75 === null || a.p75 === undefined ? -1 : a.p75;
-          bValue = b.p75 === null || b.p75 === undefined ? -1 : b.p75;
-        }
-
-        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-
-    return filtered;
-  }, [
-    allMetrics,
-    nameFilter,
-    p75Threshold,
-    thresholdOperator,
-    sortBy,
-    sortOrder,
-  ]);
+  const [selectedTab, setSelectedTab] = useState(0);
 
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -104,6 +24,10 @@ const ChromeUxReport = ({ data }) => {
     }
   };
 
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+  };
+
   const clearFilters = () => {
     setNameFilter('');
     setP75Threshold('');
@@ -112,188 +36,112 @@ const ChromeUxReport = ({ data }) => {
     setSortOrder('asc');
   };
 
-  if (!data || !data.record) {
+  // Reset selectedTab when reports change
+  useEffect(() => {
+    const successfulReports = reports.filter(
+      (report) => !report.error && report.data?.record
+    );
+
+    // Calculate total tabs (summary tab + individual report tabs)
+    const totalTabs =
+      successfulReports.length > 1
+        ? successfulReports.length + 1 // +1 for summary tab
+        : successfulReports.length;
+
+    if (selectedTab >= totalTabs && totalTabs > 0) {
+      setSelectedTab(0);
+    }
+  }, [reports, selectedTab]);
+
+  const globalFilters = {
+    nameFilter,
+    p75Threshold,
+    thresholdOperator,
+    sortBy,
+    sortOrder,
+  };
+
+  if (!reports || reports.length === 0) {
     return (
       <Typography variant="body1" color="white">
-        No CrUX data available.
+        Enter URLs above to generate Chrome UX Reports.
       </Typography>
     );
   }
 
+  // Separate successful reports from error/warning reports
+  const successfulReports = reports.filter(
+    (report) => !report.error && report.data?.record
+  );
+  const errorReports = reports.filter(
+    (report) => report.error || !report.data?.record
+  );
+
+  const isSummaryView = successfulReports.length > 1 && selectedTab === 0;
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" gutterBottom sx={{ flexGrow: 1, mb: 0 }}>
-          Chrome UX Report
-        </Typography>
-      </Box>
+    <Box sx={{ p: 3, width: '100%' }}>
+      <Typography variant="h5" gutterBottom>
+        Chrome UX Reports ({reports.length})
+      </Typography>
 
-      {showFilters && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Filters & Sorting
-          </Typography>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                label="Filter by Metric Name"
-                value={nameFilter}
-                onChange={(e) => setNameFilter(e.target.value)}
-                size="small"
-                fullWidth
-                placeholder="e.g., largest_contentful_paint"
+      {/* Show errors/warnings first */}
+      {errorReports.map((report, index) => (
+        <SingleReport
+          key={`error-${report.url}-${index}`}
+          report={report}
+          globalFilters={globalFilters}
+        />
+      ))}
+
+      {successfulReports.length > 0 && (
+        <>
+          <FilterPanel
+            nameFilter={nameFilter}
+            setNameFilter={setNameFilter}
+            p75Threshold={p75Threshold}
+            setP75Threshold={setP75Threshold}
+            thresholdOperator={thresholdOperator}
+            setThresholdOperator={setThresholdOperator}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            clearFilters={clearFilters}
+          />
+
+          <ReportTabs
+            selectedTab={selectedTab}
+            handleTabChange={handleTabChange}
+            successfulReports={successfulReports}
+          />
+
+          <TableHeader
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            handleSort={handleSort}
+            isSummaryView={isSummaryView}
+          />
+
+          {/* Selected Tab Content */}
+          {isSummaryView ? (
+            <SummaryReport
+              reports={successfulReports}
+              globalFilters={globalFilters}
+            />
+          ) : (
+            successfulReports[
+              successfulReports.length > 1 ? selectedTab - 1 : selectedTab
+            ] && (
+              <SingleReport
+                report={
+                  successfulReports[
+                    successfulReports.length > 1 ? selectedTab - 1 : selectedTab
+                  ]
+                }
+                globalFilters={globalFilters}
               />
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2}>
-              <FormControl size="small" sx={{ width: 180 }}>
-                <InputLabel>Operator</InputLabel>
-                <Select
-                  value={thresholdOperator}
-                  onChange={(e) => setThresholdOperator(e.target.value)}
-                  label="Operator"
-                >
-                  <MenuItem value="gte">≥ (Greater or equal)</MenuItem>
-                  <MenuItem value="lte">≤ (Less or equal)</MenuItem>
-                  <MenuItem value="eq">= (Equal)</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                label="p75 Threshold"
-                type="number"
-                value={p75Threshold}
-                onChange={(e) => setP75Threshold(e.target.value)}
-                size="small"
-                sx={{ width: 120 }}
-                placeholder="e.g., 2500"
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl size="small" sx={{ width: 160 }}>
-                <InputLabel>Sort By</InputLabel>
-                <Select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  label="Sort By"
-                >
-                  <MenuItem value="">None</MenuItem>
-                  <MenuItem value="name">Metric Name</MenuItem>
-                  <MenuItem value="p75">p75 Value</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  cursor: 'pointer',
-                }}
-                onClick={clearFilters}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Clear all filters
-                </Typography>
-                <IconButton size="small">×</IconButton>
-              </Box>
-            </Grid>
-          </Grid>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Showing {filteredAndSortedMetrics.length} of {allMetrics.length}{' '}
-            metrics
-          </Typography>
-        </Paper>
-      )}
-
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ width: '200px' }}>
-                <TableSortLabel
-                  active={sortBy === 'name'}
-                  direction={sortBy === 'name' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('name')}
-                  hideSortIcon={false}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  Metric
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right" sx={{ width: '100px' }}>
-                <TableSortLabel
-                  active={sortBy === 'p75'}
-                  direction={sortBy === 'p75' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('p75')}
-                  hideSortIcon={false}
-                  sx={{ fontWeight: 'bold' }}
-                >
-                  p75
-                </TableSortLabel>
-              </TableCell>
-              <TableCell sx={{ width: 'auto', fontWeight: 'bold' }}>
-                Histogram / Fractions
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredAndSortedMetrics.map((m) => (
-              <TableRow key={m.key}>
-                <TableCell sx={{ wordBreak: 'break-word' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {m.key}
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">{m.p75 ?? '—'}</TableCell>
-                <TableCell>
-                  {m.histogram ? (
-                    <Box>
-                      {m.histogram.map((h, i) => (
-                        <Chip
-                          key={i}
-                          label={`[${h.start || 0}-${h.end || '∞'}]: ${(
-                            h.density * 100
-                          ).toFixed(1)}%`}
-                          size="small"
-                          sx={{ mr: 1, mb: 1 }}
-                        />
-                      ))}
-                    </Box>
-                  ) : m.fractions ? (
-                    <Box>
-                      {Object.entries(m.fractions).map(([k, v]) => (
-                        <Chip
-                          key={k}
-                          label={`${k}: ${(v * 100).toFixed(1)}%`}
-                          size="small"
-                          sx={{ mr: 1, mb: 1 }}
-                        />
-                      ))}
-                    </Box>
-                  ) : (
-                    '—'
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {filteredAndSortedMetrics.length === 0 && allMetrics.length > 0 && (
-        <Box sx={{ textAlign: 'center', mt: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            No metrics match the current filters. Try adjusting your filter
-            criteria.
-          </Typography>
-        </Box>
+            )
+          )}
+        </>
       )}
     </Box>
   );

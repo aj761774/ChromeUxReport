@@ -5,16 +5,16 @@ const Search = ({ urls, isSearching, handleChange, handleSearch }) => {
   return (
     <div className="search">
       <Typography variant="subtitle1" gutterBottom>
-        <strong>URL:</strong>
+        <strong>URLs (comma-separated):</strong>
       </Typography>
       <TextField
-        placeholder="Enter URL"
+        placeholder="Enter URLs (e.g., https://example.com, https://google.com)"
         value={urls}
         onChange={handleChange}
         sx={{
           // general sizing
           height: 40,
-          width: 300,
+          width: 600,
           '& .MuiOutlinedInput-root': {
             height: 40,
             borderRadius: '6px',
