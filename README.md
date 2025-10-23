@@ -52,7 +52,7 @@ npm install
 
 ### 2. Environment Configuration
 
-Create a `.env` file in the root directory and add your Chrome UX Report API key:
+Add your Chrome UX Report API key in `.env` file:
 
 ```env
 VITE_CHROME_UX_REPORT_API_KEY=your_api_key_here
